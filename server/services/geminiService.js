@@ -1,10 +1,10 @@
-
 import { GoogleGenAI } from "@google/genai";
 import sanitizeHtml from "sanitize-html";
 const MODEL_RETRY_DELAYS = [2000, 4000];
 import {
-  REPORT_PARTS,
   REPORT_LANGUAGES,
+  DEFAULT_REPORT_TYPE,
+  getReportConfig,
   getPlanningSchema,
   createPlanningPrompt,
   createSectionPrompt
@@ -17,7 +17,7 @@ import {
 // Keep the default conservative for Gemini quota safety.
 // Increase to 3 only if the account has enough requests/tokens per minute.
 const GENERATION_CONCURRENCY = Math.min(
-  3,
+  7,
   Math.max(1, Number(process.env.GEMINI_GENERATION_CONCURRENCY) || 2)
 );
 
@@ -212,7 +212,8 @@ async function generateWithFallback(ai, prompt, options = {}) {
 async function createReportPlan(
   ai,
   inputText,
-  language
+  language,
+  reportType
 ) {
   console.log("--------------------------------");
   console.log("Step 1: Analysing teacher information...");
@@ -220,7 +221,8 @@ async function createReportPlan(
 
   const prompt = createPlanningPrompt(
     inputText,
-    language
+    language,
+    reportType
   );
 
   const result = await generateWithFallback(
@@ -251,8 +253,39 @@ async function createReportPlan(
 
   return {
     plan,
+    // The planning step uses one model; expansionModels belongs only to
+    // generateReportPart and is intentionally not referenced here.
     modelUsed: result.modelUsed
   };
+}
+
+// --------------------------------------------------
+// Front matter guard
+// --------------------------------------------------
+
+// The front-matter part must end with the index (अनुक्रमणिका). The model
+// sometimes keeps writing after it (a condensed copy of the chapters), which
+// duplicates the report and breaks the page numbering. Cut everything from
+// the first chapter heading that appears after the index heading.
+function trimFrontMatter(html) {
+  const indexHeading =
+    /<h[1-4][^>]*>\s*(?:<[^>]+>\s*)*(?:अनुक्रमणिका|विषय\s?सूची|Table of Contents|Contents|Index)/i;
+  const chapterHeading =
+    /<h[1-4][^>]*>\s*(?:<[^>]+>\s*)*(?:प्रकरण|अध्याय|Chapter)\s*[०-९0-9IVXivx]/i;
+
+  const indexAt = html.search(indexHeading);
+  const from = indexAt >= 0 ? indexAt : 0;
+  const chapterAt = html.slice(from).search(chapterHeading);
+
+  if (chapterAt < 0) return html;
+
+  const trimmed = html.slice(0, from + chapterAt).trim();
+
+  console.warn(
+    `Front matter contained chapter content after the index; removed ${html.length - trimmed.length} characters.`
+  );
+
+  return trimmed;
 }
 
 // --------------------------------------------------
@@ -264,7 +297,8 @@ async function generateReportPart(
   part,
   plan,
   inputText,
-  language
+  language,
+  reportType
 ) {
   console.log("--------------------------------");
   console.log("Generating Report Section:", part.title);
@@ -274,7 +308,8 @@ async function generateReportPart(
     part,
     plan,
     inputText,
-    language
+    language,
+    reportType
   });
 
   const result = await generateWithFallback(
@@ -290,22 +325,106 @@ async function generateReportPart(
     .replace(/\s*```$/i, "")
     .trim();
 
+  if (part.id === "front_matter") {
+    html = trimFrontMatter(html);
+  }
+
   if (!html) {
     throw new Error(
       `${part.title} returned empty content.`
     );
   }
 
+  const countWords = (value) => value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/&#\d+;/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+  const stripHtmlFences = (value) => String(value || "")
+    .replace(/^```(?:html)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  let wordCount = countWords(html);
+  const minimumWords = Number(part.minWords) || 0;
+  const expansionModels = new Set([result.modelUsed]);
+  const MAX_EXPANSION_ROUNDS = 6;
+  let stalledRounds = 0;
+
+  // Expand incrementally. Each response must contain ONLY new HTML so the
+  // existing chapter is never replaced by a shorter rewrite.
+  for (let round = 1; minimumWords > 0 && wordCount < minimumWords && round <= MAX_EXPANSION_ROUNDS; round += 1) {
+    const missingWords = minimumWords - wordCount;
+    const requestedWords = Math.min(Math.max(missingWords + 180, 700), 1800);
+    console.warn(
+      `Section below minimum (${wordCount}/${minimumWords}). Expansion ${round}/${MAX_EXPANSION_ROUNDS}; requesting about ${requestedWords} new words.`
+    );
+
+    const expansionPrompt = `
+तुम्ही शैक्षणिक अहवालाचा एक भाग विस्तारत आहात.
+भाग: ${part.title}
+
+आधीचा पूर्ण मजकूर (फक्त संदर्भासाठी; तो पुन्हा देऊ नका):
+${html}
+
+सध्याची शब्दसंख्या: ${wordCount}
+किमान आवश्यक शब्दसंख्या: ${minimumWords}
+अजून आवश्यक शब्द: ${missingWords}
+या प्रयत्नात अंदाजे ${requestedWords} नवीन शब्द जोडा.
+
+फक्त पुढील नवीन, अद्याप न आलेला मजकूर HTML स्वरूपात द्या. आधीचा मजकूर परत देऊ नका. नवीन उपशीर्षके, सविस्तर स्पष्टीकरण, विषयसुसंगत कृती, मूल्यमापन निकष, रिकामे नोंदपत्र/तक्ते आणि उपयोगी परिशिष्टे जोडा. आधीच्या मजकुराची पुनरावृत्ती करू नका.
+
+तथ्यनिष्ठता:
+- विद्यार्थी नावे, गुण, टक्केवारी, प्रत्यक्ष निरीक्षणे, फोटो, संदर्भ किंवा पूर्ण झालेल्या उपक्रमांचे दावे बनवू नका.
+- प्रत्यक्ष पुरावा नसल्यास नमुना तक्ते रिकामे ठेवा आणि त्यांना 'नोंद भरण्यासाठी नमुना' म्हणा.
+- प्रस्तावित कृतींना स्पष्टपणे 'प्रस्तावित' म्हणा.
+- मूळ अहवालाची भाषा आणि औपचारिक शैली कायम ठेवा.
+- फक्त परवानगी असलेले HTML tags वापरा: h1,h2,h3,h4,p,strong,b,em,i,u,ol,ul,li,table,thead,tbody,tr,th,td,hr,br.
+- Markdown code fence, प्रस्तावना किंवा स्पष्टीकरण देऊ नका.
+`;
+
+    const expanded = await generateWithFallback(ai, expansionPrompt, {
+      maxOutputTokens: 10000
+    });
+    expansionModels.add(expanded.modelUsed);
+    const addedHtml = stripHtmlFences(expanded.text);
+    const addedWords = countWords(addedHtml);
+
+    if (!addedHtml || addedWords < 80) {
+      stalledRounds += 1;
+      console.warn(`Expansion ${round} returned too little new content (${addedWords} words).`);
+      if (stalledRounds >= 2) break;
+      continue;
+    }
+
+    // Append only; never replace valid existing section content.
+    html = `${html}\n${addedHtml}`;
+    const updatedWordCount = countWords(html);
+    if (updatedWordCount <= wordCount) {
+      stalledRounds += 1;
+      if (stalledRounds >= 2) break;
+    } else {
+      stalledRounds = 0;
+      wordCount = updatedWordCount;
+    }
+  }
+
   console.log("--------------------------------");
   console.log("Section Completed:", part.title);
-  console.log("Model:", result.modelUsed);
+  console.log("Models:", [...expansionModels].join(", "));
+  console.log("Section Word Count:", wordCount);
+  console.log("Target:", part.wordTarget);
   console.log("--------------------------------");
 
   return {
     id: part.id,
     title: part.title,
     html,
-    modelUsed: result.modelUsed
+    wordCount,
+    modelUsed: [...expansionModels].join(", ")
   };
 }
 
@@ -318,57 +437,57 @@ async function generateAllParts(
   plan,
   inputText,
   language,
+  reportType,
   onPartCompleted = () => {}
 ) {
-  const results = new Array(
-    REPORT_PARTS.length
+  const REPORT_PARTS = getReportConfig(reportType).parts;
+  const results = new Array(REPORT_PARTS.length);
+
+  // Start the biggest parts first so the short ones fill the gaps at the
+  // end, instead of one long part finishing alone.
+  const queue = REPORT_PARTS.map((_, index) => index).sort(
+    (a, b) =>
+      (REPORT_PARTS[b].minWords || 0) - (REPORT_PARTS[a].minWords || 0)
   );
 
-  for (
-    let i = 0;
-    i < REPORT_PARTS.length;
-    i += GENERATION_CONCURRENCY
-  ) {
-    const batch = REPORT_PARTS.slice(
-      i,
-      i + GENERATION_CONCURRENCY
-    );
+  let failed = false;
 
-    const groupNumber =
-      Math.floor(i / GENERATION_CONCURRENCY) + 1;
+  // A pool of workers: as soon as one part finishes, that worker starts the
+  // next one. (The old code waited for the slowest part of every batch.)
+  const worker = async () => {
+    while (!failed && queue.length) {
+      const index = queue.shift();
+      const part = REPORT_PARTS[index];
 
-    console.log("--------------------------------");
-    console.log("Generating Report Group:", groupNumber);
-    console.log("Sections:", batch.map((p) => p.title));
-    console.log("--------------------------------");
+      console.log("Generating Report Section:", part.title);
 
-    const completed = await Promise.all(
-      batch.map(async (part, index) => {
+      try {
         const result = await generateReportPart(
           ai,
           part,
           plan,
           inputText,
-          language
+          language,
+          reportType
         );
 
-        return {
-          index: i + index,
-          result
-        };
-      })
-    );
+        results[index] = result;
+        onPartCompleted(result, index);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
 
-    completed.forEach(({ index, result }) => {
-      results[index] = result;
-      onPartCompleted(result, index);
-    });
+  console.log("Generation concurrency:", GENERATION_CONCURRENCY);
 
-    console.log(
-      "Report Group Completed:",
-      groupNumber
-    );
-  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(GENERATION_CONCURRENCY, REPORT_PARTS.length) },
+      worker
+    )
+  );
 
   return results;
 }
@@ -423,6 +542,7 @@ function cleanReportHtml(html) {
 export async function generateReport({
   inputText,
   language,
+  reportType = DEFAULT_REPORT_TYPE,
   onProgress = () => {}
 }) {
   const reportProgress = (percent, stage, detail = "") => {
@@ -458,6 +578,7 @@ export async function generateReport({
     );
   }
 
+  const REPORT_PARTS = getReportConfig(reportType).parts;
   const startTime = Date.now();
 
   const ai = createGeminiClient();
@@ -470,6 +591,7 @@ export async function generateReport({
   console.log("Primary Model:", models[0]);
   console.log("Fallback Models:", models.slice(1));
   console.log("Language:", REPORT_LANGUAGES[language]);
+  console.log("Report Type:", reportType);
   console.log("================================");
 
   // Stage 1: Input Analysis
@@ -478,7 +600,8 @@ export async function generateReport({
   const planningResult = await createReportPlan(
     ai,
     inputText.trim(),
-    language
+    language,
+    reportType
   );
 
   const plan = planningResult.plan;
@@ -493,6 +616,7 @@ export async function generateReport({
     plan,
     inputText.trim(),
     language,
+    reportType,
     (partResult) => {
       completedParts += 1;
       const percent = 15 + (completedParts / REPORT_PARTS.length) * 75;
@@ -528,6 +652,25 @@ export async function generateReport({
 
   console.log("Generated Word Count:", generatedWordCount);
 
+  // Every section must meet its own minimum. The configured section minima
+  // total 13,400 words, so checking only a 12,000-word grand total is unsafe.
+  const minimumReportWords = REPORT_PARTS.reduce(
+    (total, part) => total + (Number(part.minWords) || 0),
+    0
+  );
+  const shortParts = parts
+    .filter((part) => part.wordCount < (REPORT_PARTS.find((p) => p.id === part.id)?.minWords || 0))
+    .map((part) => {
+      const target = REPORT_PARTS.find((p) => p.id === part.id)?.minWords || 0;
+      return `${part.title}: ${part.wordCount}/${target} शब्द`;
+    });
+
+  if (generatedWordCount < minimumReportWords || shortParts.length > 0) {
+    throw new Error(
+      `अहवालाचा मजकूर अपुरा आहे (${generatedWordCount}/${minimumReportWords} शब्द). अपूर्ण विभाग: ${shortParts.join("; ") || "अंतिम HTML मध्ये शब्दसंख्या कमी झाली आहे"}. PDF तयार करण्यापूर्वी हे विभाग पूर्ण करणे आवश्यक आहे.`
+    );
+  }
+
   const durationSeconds = Math.round(
     (Date.now() - startTime) / 1000
   );
@@ -555,6 +698,11 @@ export async function generateReport({
     modelUsed: modelsUsed.join(", "),
     generationTimeSeconds: durationSeconds,
     generatedWordCount,
+    partWordCounts: parts.map(({ id, title, wordCount }) => ({
+      id,
+      title,
+      wordCount
+    })),
     reportPlan: plan
   };
 }

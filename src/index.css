@@ -141,3 +141,11 @@
     page-break-inside: avoid;
   }
 }
+
+
+/* Export-specific document support. Existing editor styles above remain unchanged. */
+.report-content img { max-width: 100%; height: auto; }
+@media print {
+  .report-print-area { background: #fff !important; }
+  .report-content hr.report-page-break { break-after: page; page-break-after: always; }
+}

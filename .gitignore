@@ -1,3 +1,12 @@
+
+# Environment variables - Never upload secrets
+.env
+.env.*
+!.env.example
+
+server/.env
+server/.env.*
+!server/.env.example
 # Logs
 logs
 server/.env

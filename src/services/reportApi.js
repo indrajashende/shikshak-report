@@ -1,6 +1,5 @@
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "";
-// Check Backend Version
 let health;
 
 try {
@@ -34,7 +33,7 @@ headers: {
 },    body: JSON.stringify(
       Array.isArray(formData.reports)
         ? { reports: formData.reports }
-        : { inputText: formData.inputText, language: formData.language }
+        : { inputText: formData.inputText, language: formData.language, reportType: formData.reportType }
     )
   });
 

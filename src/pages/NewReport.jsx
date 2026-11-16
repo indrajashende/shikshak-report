@@ -5,6 +5,7 @@ import {
   ShieldCheck, Plus, Trash2, ArrowLeft
 } from "lucide-react";
 import { generateReport } from "../services/reportApi";
+import { reportTypes } from "../components/input/ReportTypeSelector";
 
 const languageOptions = [
   { value: "mr", label: "मराठी" },
@@ -20,9 +21,10 @@ const stageLabels = {
   completed: "अहवाल पूर्ण झाला आहे"
 };
 
-const makeReport = (language = "mr") => ({
+const makeReport = (language = "mr", reportType = "innovation") => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   language,
+  reportType,
   inputText: ""
 });
 
@@ -31,6 +33,7 @@ function NewReport() {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get("mode") === "multiple" ? "multiple" : "single";
   const [language, setLanguage] = useState("mr");
+  const [reportType, setReportType] = useState("innovation");
   const [inputText, setInputText] = useState("");
   const [reports, setReports] = useState([
     makeReport("mr"),
@@ -52,9 +55,10 @@ function NewReport() {
   const handleGenerate = async (e) => {
     e.preventDefault();
     const jobs = mode === "single"
-      ? [{ language, inputText }]
-      : reports.map(({ language: reportLanguage, inputText: reportInput }) => ({
+      ? [{ language, reportType, inputText }]
+      : reports.map(({ language: reportLanguage, reportType: reportKind, inputText: reportInput }) => ({
           language: reportLanguage,
+          reportType: reportKind,
           inputText: reportInput
         }));
 
@@ -86,6 +90,7 @@ function NewReport() {
         ? [{
             ...result,
             language,
+            reportType,
             languageLabel: languageOptions.find((item) => item.value === language)?.label
           }]
         : result.reports;
@@ -134,14 +139,25 @@ function NewReport() {
         <form onSubmit={handleGenerate} className="space-y-5 sm:space-y-6">
           {!isMultiple ? (
             <>
-              <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-                <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Languages size={18} className="text-blue-900" /> रिपोर्टची भाषा
-                </label>
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={loading}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100 md:max-w-sm">
-                  {languageOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
+              <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 sm:p-6">
+                <div>
+                  <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <FileText size={18} className="text-blue-900" /> अहवालाचा प्रकार
+                  </label>
+                  <select value={reportType} onChange={(e) => setReportType(e.target.value)} disabled={loading}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100">
+                    {reportTypes.filter((t) => t.value !== "other").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Languages size={18} className="text-blue-900" /> रिपोर्टची भाषा
+                  </label>
+                  <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={loading}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100">
+                    {languageOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </div>
               </section>
 
               <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
@@ -194,6 +210,13 @@ function NewReport() {
                         </button>
                       )}
                     </div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <FileText size={17} className="text-blue-900" /> अहवालाचा प्रकार
+                    </label>
+                    <select value={report.reportType} onChange={(e) => updateReport(report.id, "reportType", e.target.value)} disabled={loading}
+                      className="mb-5 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100 sm:max-w-sm">
+                      {reportTypes.filter((t) => t.value !== "other").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
                     <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
                       <Languages size={17} className="text-blue-900" /> रिपोर्टची भाषा
                     </label>

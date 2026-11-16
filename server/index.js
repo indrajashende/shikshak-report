@@ -41,9 +41,8 @@ app.use(
 );
 
 app.use(express.json({
-  limit: "250kb"
+  limit: "10mb"
 }));
-
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 10,

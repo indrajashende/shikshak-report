@@ -1,6 +1,8 @@
 import { generateReport } from "../services/geminiService.js";
+import { REPORT_TYPES } from "../templates/reportTemplate.js";
 
 const validLanguages = ["mr", "en", "hi"];
+const validReportTypes = Object.keys(REPORT_TYPES);
 
 function sendEvent(res, event, payload) {
   if (res.writableEnded || res.destroyed) return;
@@ -11,7 +13,7 @@ function sendEvent(res, event, payload) {
 export async function generateReportController(req, res, next) {
   const body = req.body || {};
   const isMultiple = Array.isArray(body.reports);
-  const jobs = isMultiple ? body.reports : [{ inputText: body.inputText, language: body.language }];
+  const jobs = isMultiple ? body.reports : [{ inputText: body.inputText, language: body.language, reportType: body.reportType }];
 
   if (!jobs.length || jobs.length > 4) {
     return res.status(400).json({
@@ -22,7 +24,8 @@ export async function generateReportController(req, res, next) {
 
   const invalidJob = jobs.find((job) =>
     !job || typeof job.inputText !== "string" || !job.inputText.trim() ||
-    job.inputText.length > 50000 || !validLanguages.includes(job.language)
+    job.inputText.length > 50000 || !validLanguages.includes(job.language) ||
+    !validReportTypes.includes(job.reportType || "action_research")
   );
 
   if (invalidJob) {
@@ -53,6 +56,7 @@ export async function generateReportController(req, res, next) {
       const result = await generateReport({
         inputText: job.inputText.trim(),
         language: job.language,
+        reportType: job.reportType || "action_research",
         onProgress: (progress) => {
           const overallPercent = ((index + (progress.percent / 100)) / jobs.length) * 100;
           sendEvent(res, "progress", {
@@ -67,6 +71,8 @@ export async function generateReportController(req, res, next) {
       results.push({
         ...result,
         language: job.language,
+        reportType: job.reportType || "action_research",
+        reportTypeLabel: REPORT_TYPES[job.reportType || "action_research"].label,
         languageLabel: ({ mr: "मराठी", hi: "हिंदी", en: "English" })[job.language]
       });
     }
