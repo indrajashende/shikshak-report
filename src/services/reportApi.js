@@ -105,3 +105,23 @@ headers: {
 
   return finalResult;
 }
+
+export async function generatePptx({ sourceText, prompt, language, reportType, theme }) {
+  const response = await fetch(`${API_BASE_URL}/api/reports/pptx`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceText, prompt, language, reportType, theme })
+  });
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => null);
+    throw new Error(
+      result?.message ||
+      (response.status === 404
+        ? "Backend ची जुनी आवृत्ती सुरू आहे. Backend Restart करा."
+        : "PPTX तयार करण्यात समस्या आली.")
+    );
+  }
+
+  return response.blob();
+}

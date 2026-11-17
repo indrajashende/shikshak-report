@@ -5,6 +5,7 @@ import AppLayout from "./components/layout/AppLayout";
 import Home from "./pages/Home";
 import NewReport from "./pages/NewReport";
 import EditReport from "./pages/EditReport";
+import NewPptx from "./pages/NewPptx";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/new-report" element={<NewReport />} />
           <Route path="/edit-report" element={<EditReport />} />
+          <Route path="/new-pptx" element={<NewPptx />} />
         </Route>
       </Routes>
     </BrowserRouter>

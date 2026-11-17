@@ -25,13 +25,28 @@ const COVER_HEADINGS = ["मुखपृष्ठ", "coverpage", "titlepage"];
 // layout before the final PDF is made.
 const MAX_VERIFY_PASSES = 3;
 
-// Page geometry (mm). The page border is drawn inside the page; the page
-// number is centred in the strip between the border and the text area, so
-// BORDER_INSET_MM must stay smaller than the bottom margin.
-const BORDER_INSET_MM = 12;
-const MARGIN_TOP_MM = 19;
-const MARGIN_BOTTOM_MM = 22;
-const MARGIN_SIDE_MM = 20;
+// The finished report must not be longer than this many pages.
+const MAX_REPORT_PAGES = 45;
+
+// Page geometry (mm), measured from the reference report (A4, Word PDF).
+//
+// Reference layout: the frame is NOT centred on the page. Word leaves a wider
+// binding margin on the LEFT (~36 mm) than on the right (~24 mm), and the text
+// sits just inside the frame. Keep these numbers in sync with the @page rule
+// in src/pages/EditReport.jsx (CSS order: top right bottom left).
+//
+
+const MARGIN_TOP_MM = 17.7;
+const MARGIN_BOTTOM_MM = 36;
+const MARGIN_LEFT_MM = 22;
+const MARGIN_RIGHT_MM = 22;
+
+const BORDER_TOP_MM = 10;
+const BORDER_BOTTOM_MM = 10;
+const BORDER_LEFT_MM = 14;
+const BORDER_RIGHT_MM = 14;
+
+
 
 // Height of the text area of one page (mm), used to centre the title page.
 // A few mm are kept free so the title page can never spill onto a 2nd page.
@@ -45,8 +60,8 @@ const PDF_OPTIONS = {
   margin: {
     top: `${MARGIN_TOP_MM}mm`,
     bottom: `${MARGIN_BOTTOM_MM}mm`,
-    left: `${MARGIN_SIDE_MM}mm`,
-    right: `${MARGIN_SIDE_MM}mm`
+    left: `${MARGIN_LEFT_MM}mm`,
+    right: `${MARGIN_RIGHT_MM}mm`
   }
 };
 
@@ -93,6 +108,11 @@ function toRoman(num) {
   }
 
   return result;
+}
+
+// 1, 2, 3 ... -> १, २, ३ ...
+function toMarathiDigits(value) {
+  return String(value).replace(/[0-9]/g, (digit) => "०१२३४५६७८९"[Number(digit)]);
 }
 
 // Reads the invisible markers out of a rendered PDF:
@@ -142,7 +162,7 @@ function analyzeMarkers(extractedPages) {
 }
 
 // Turns marker positions into page labels.
-function buildNumbering(analysis, tocRows) {
+function buildNumbering(analysis, tocRows, useMarathiDigits = false) {
   const { markerPages, indexPages, coverPage } = analysis;
 
   // The first page of the report is the cover. Anything before it
@@ -172,13 +192,17 @@ function buildNumbering(analysis, tocRows) {
   const getPageLabel = (physicalPage) => {
     if (physicalPage < frontStart) return "";
 
-    if (!bodyStart) return String(physicalPage - frontStart + 1);
+    // Report pages are counted 1, 2, 3 ... (Marathi reports: १, २, ३ ...).
+    const arabic = (value) =>
+      useMarathiDigits ? toMarathiDigits(value) : String(value);
+
+    if (!bodyStart) return arabic(physicalPage - frontStart + 1);
 
     if (physicalPage < bodyStart) {
       return toRoman(physicalPage - frontStart + 1);
     }
 
-    return String(physicalPage - bodyStart + 1);
+    return arabic(physicalPage - bodyStart + 1);
   };
 
   // The label that is actually printed on the page.
@@ -209,17 +233,93 @@ function buildNumbering(analysis, tocRows) {
   };
 }
 
+// The built-in PDF font cannot draw Devanagari digits (१, २, ३ ...). The
+// browser already has the Devanagari fonts, so it draws the labels: one PDF
+// page per label, which is then stamped onto the report page.
+async function renderLabelStamps(browser, labels) {
+  const mm = (value) => value.toFixed(2);
+
+  // Centre of the number: under the middle of the text column, halfway
+  // between the text area and the bottom border line.
+  const centreX = (MARGIN_LEFT_MM + (210 - MARGIN_RIGHT_MM)) / 2;
+  const centreY = 297 - (BORDER_BOTTOM_MM + MARGIN_BOTTOM_MM) / 2;
+
+  const pages = labels
+    .map((label) => `<div class="s"><span class="n">${label}</span></div>`)
+    .join("");
+
+  const stampPage = await browser.newPage();
+
+  try {
+    await stampPage.setContent(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+        @page { size: 210mm 297mm; margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        .s { position: relative; width: 210mm; height: 296.5mm; overflow: hidden;
+             break-after: page; page-break-after: always; }
+        .s:last-child { break-after: auto; page-break-after: auto; }
+        .n { position: absolute; left: ${mm(centreX)}mm; top: ${mm(centreY)}mm;
+             transform: translate(-50%, -50%); white-space: nowrap; line-height: 1;
+             font-size: 12pt; color: #262626;
+             font-family: "Mangal", "Noto Sans Devanagari", "Nirmala UI", Arial, sans-serif; }
+      </style></head><body>${pages}</body></html>`,
+      { waitUntil: "networkidle0", timeout: 60000 }
+    );
+
+    await stampPage.evaluate(async () => {
+      await document.fonts.ready;
+    });
+
+    return await stampPage.pdf({
+      preferCSSPageSize: true,
+      printBackground: false
+    });
+  } finally {
+    await stampPage.close();
+  }
+}
+
 // Draws the page border and the page number on every page.
-async function addBorderAndPageNumbers(pdfBuffer, numbering) {
+async function addBorderAndPageNumbers(pdfBuffer, numbering, browser) {
   const pdfDocument = await PDFDocument.load(pdfBuffer);
   const font = await pdfDocument.embedFont(StandardFonts.Helvetica);
 
+  if (pdfDocument.getPageCount() > MAX_REPORT_PAGES) {
+    console.warn(
+      `PDF has ${pdfDocument.getPageCount()} pages (limit ${MAX_REPORT_PAGES}). ` +
+        "Reduce the minWords / wordTarget values in server/templates/reportTemplate.js."
+    );
+  }
+
+  const pageLabels = pdfDocument
+    .getPages()
+    .map((_, pageIndex) => numbering.getPrintedLabel(pageIndex + 1));
+
+  // Pages whose number is written with Devanagari digits.
+  const stampedPages = pageLabels
+    .map((label, pageIndex) => (/[०-९]/.test(label) ? pageIndex : -1))
+    .filter((pageIndex) => pageIndex >= 0);
+
+  let embeddedStamps = [];
+
+  if (stampedPages.length) {
+    const stampPdf = await renderLabelStamps(
+      browser,
+      stampedPages.map((pageIndex) => pageLabels[pageIndex])
+    );
+
+    embeddedStamps = await pdfDocument.embedPdf(
+      stampPdf,
+      stampedPages.map((_, order) => order)
+    );
+  }
+
   const mm = (value) => (value * 72) / 25.4;
-  const borderInset = mm(BORDER_INSET_MM);
   const numberSize = 11;
 
-  // Centre the number vertically between the border and the text area.
-  const stripCentre = mm((BORDER_INSET_MM + MARGIN_BOTTOM_MM) / 2);
+  // Centre the number vertically between the text area and the bottom
+  // border line.
+  const stripCentre = mm((BORDER_BOTTOM_MM + MARGIN_BOTTOM_MM) / 2);
   const capHeight = font.heightAtSize(numberSize, { descender: false });
   const numberBaseline = stripCentre - capHeight / 2;
 
@@ -227,21 +327,35 @@ async function addBorderAndPageNumbers(pdfBuffer, numbering) {
     const { width, height } = pdfPage.getSize();
 
     pdfPage.drawRectangle({
-      x: borderInset,
-      y: borderInset,
-      width: width - borderInset * 2,
-      height: height - borderInset * 2,
+      x: mm(BORDER_LEFT_MM),
+      y: mm(BORDER_BOTTOM_MM),
+      width: width - mm(BORDER_LEFT_MM + BORDER_RIGHT_MM),
+      height: height - mm(BORDER_TOP_MM + BORDER_BOTTOM_MM),
       borderColor: rgb(0, 0, 0),
       borderWidth: 1
     });
 
-    const label = numbering.getPrintedLabel(pageIndex + 1);
+    const label = pageLabels[pageIndex];
 
-    if (label) {
+    const stampOrder = stampedPages.indexOf(pageIndex);
+
+    if (stampOrder >= 0) {
+      pdfPage.drawPage(embeddedStamps[stampOrder], {
+        x: 0,
+        y: 0,
+        width,
+        height
+      });
+    } else if (label) {
       const textWidth = font.widthOfTextAtSize(label, numberSize);
 
+      // The number is centred under the text column, like the reference.
+      const columnCentre =
+        mm(MARGIN_LEFT_MM) +
+        (width - mm(MARGIN_LEFT_MM + MARGIN_RIGHT_MM)) / 2;
+
       pdfPage.drawText(label, {
-        x: (width - textWidth) / 2,
+        x: columnCentre - textWidth / 2,
         y: numberBaseline,
         size: numberSize,
         font,
@@ -320,6 +434,11 @@ export async function generatePdf(html) {
     // Do not create a separate oversized title-only page: this was the
     // source of an unnecessary sparse/blank-looking first page.
 
+    // Marathi reports use Marathi digits (१, २, ३ ...) for the report pages.
+    const useMarathiDigits = await page.evaluate(() =>
+      (document.documentElement.lang || "").toLowerCase().startsWith("mr")
+    );
+
     // Index rows created by the frontend.
     const tocRows = await page.evaluate(() =>
       Array.from(
@@ -389,7 +508,7 @@ export async function generatePdf(html) {
 
     if (tocRows.length) {
       // Pass 1: find where every heading falls.
-      numbering = buildNumbering(await measure(), tocRows);
+      numbering = buildNumbering(await measure(), tocRows, useMarathiDigits);
 
       // Verification: write the numbers into the index, render again and
       // measure again. If the numbers still match, they are correct for
@@ -399,7 +518,11 @@ export async function generatePdf(html) {
       for (let attempt = 1; attempt <= MAX_VERIFY_PASSES; attempt++) {
         await fillIndex(numbering.tocLabels);
 
-        const checked = buildNumbering(await measure(), tocRows);
+        const checked = buildNumbering(
+          await measure(),
+          tocRows,
+          useMarathiDigits
+        );
 
         if (checked.signature === numbering.signature) {
           verified = true;
@@ -421,7 +544,8 @@ export async function generatePdf(html) {
     } else {
       numbering = buildNumbering(
         { markerPages: new Map(), indexPages: null, coverPage: null },
-        []
+        [],
+        useMarathiDigits
       );
     }
 
@@ -447,7 +571,11 @@ export async function generatePdf(html) {
     const finalGeneratedPdf = await page.pdf(PDF_OPTIONS);
 
     // Add page border and page numbers to every page.
-    return await addBorderAndPageNumbers(finalGeneratedPdf, numbering);
+    return await addBorderAndPageNumbers(
+      finalGeneratedPdf,
+      numbering,
+      browser
+    );
   } finally {
     if (browser) {
       await browser.close();

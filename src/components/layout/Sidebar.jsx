@@ -11,6 +11,7 @@ import {
   GraduationCap,
   ChevronRight,
   ChevronDown,
+  Presentation,
 } from "lucide-react";
 
 function Sidebar() {
@@ -115,6 +116,13 @@ function Sidebar() {
 
             </div>
           )}
+
+
+          {/* PPTX SLIDES */}
+          <NavLink to="/new-pptx" className={menuClass}>
+            <Presentation size={19} />
+            <span>PPTX स्लाइड्स</span>
+          </NavLink>
 
         </nav>
       </div>

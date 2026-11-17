@@ -96,7 +96,7 @@ export const REPORT_BLUEPRINT = {
 };
 
 // Seven focused parts keep each Gemini response within its output limit.
-// minWords are enforced per part; their current total is 12,300 words.
+// minWords are enforced per part; their current total is about 6,000 words (about 40 A4 pages).
 // Page targets are editorial targets; final PDF pagination is verified at export.
 export const REPORT_PARTS = [
   {
@@ -118,9 +118,9 @@ export const REPORT_PARTS = [
   {
     id: "chapter1",
     title: "प्रकरण १ – प्रास्ताविक",
-    pageTarget: "८ ते ९ पाने",
-    wordTarget: "सुमारे ३००० ते ३५०० शब्द",
-    minWords: 2600,
+    pageTarget: "५ ते ६ पाने",
+    wordTarget: "सुमारे १४०० ते १७०० शब्द",
+    minWords: 1200,
     sections: [
       "प्रकरण १ – प्रास्ताविक",
       ...REPORT_BLUEPRINT.chapters[0].sections
@@ -129,9 +129,9 @@ export const REPORT_PARTS = [
   {
     id: "chapter2",
     title: "प्रकरण २ – संबंधित साहित्याचा व संशोधनाचा आढावा",
-    pageTarget: "५ ते ६ पाने",
-    wordTarget: "सुमारे २००० ते २४०० शब्द",
-    minWords: 1700,
+    pageTarget: "३ ते ४ पाने",
+    wordTarget: "सुमारे १००० ते १२०० शब्द",
+    minWords: 850,
     sections: [
       "प्रकरण २ – संबंधित साहित्याचा व संशोधनाचा आढावा",
       ...REPORT_BLUEPRINT.chapters[1].sections
@@ -140,9 +140,9 @@ export const REPORT_PARTS = [
   {
     id: "chapter3",
     title: "प्रकरण ३ – संशोधन कार्यपद्धती",
-    pageTarget: "७ ते ८ पाने",
-    wordTarget: "सुमारे २५०० ते ३००० शब्द",
-    minWords: 2200,
+    pageTarget: "५ ते ६ पाने",
+    wordTarget: "सुमारे १३०० ते १६०० शब्द",
+    minWords: 1100,
     sections: [
       "प्रकरण ३ – संशोधन कार्यपद्धती",
       ...REPORT_BLUEPRINT.chapters[2].sections
@@ -151,9 +151,9 @@ export const REPORT_PARTS = [
   {
     id: "chapter4",
     title: "प्रकरण ४ – माहितीचे संकलन, विश्लेषण व अर्थनिर्वचन",
-    pageTarget: "८ ते ९ पाने",
-    wordTarget: "सुमारे २८०० ते ३३०० शब्द",
-    minWords: 2500,
+    pageTarget: "६ ते ७ पाने",
+    wordTarget: "सुमारे १५०० ते १८०० शब्द",
+    minWords: 1300,
     sections: [
       "प्रकरण ४ – माहितीचे संकलन, विश्लेषण व अर्थनिर्वचन",
       ...REPORT_BLUEPRINT.chapters[3].sections
@@ -162,9 +162,9 @@ export const REPORT_PARTS = [
   {
     id: "chapter5",
     title: "प्रकरण ५ – सारांश, निष्कर्ष आणि शिफारशी",
-    pageTarget: "५ ते ६ पाने",
-    wordTarget: "सुमारे १८०० ते २२०० शब्द",
-    minWords: 1600,
+    pageTarget: "४ ते ५ पाने",
+    wordTarget: "सुमारे १००० ते १२०० शब्द",
+    minWords: 850,
     sections: [
       "प्रकरण ५ – सारांश, निष्कर्ष आणि शिफारशी",
       ...REPORT_BLUEPRINT.chapters[4].sections
@@ -173,9 +173,9 @@ export const REPORT_PARTS = [
   {
     id: "appendix",
     title: "प्रकरण ६ – परिशिष्ट आणि अंतिम पाने",
-    pageTarget: "६ ते ८ पाने",
-    wordTarget: "सुमारे २००० ते २४०० शब्द",
-    minWords: 1700,
+    pageTarget: "३ ते ४ पाने",
+    wordTarget: "सुमारे ८०० ते १००० शब्द",
+    minWords: 650,
     sections: [
       "प्रकरण ६ – परिशिष्ट",
       ...REPORT_BLUEPRINT.chapters[5].sections,
@@ -277,7 +277,7 @@ export const REPORT_TYPES = {
     label: "कृती संशोधन अहवाल",
     reportLabel: "कृती संशोधन अहवाल",
     sampleNote: "दिलेल्या ५३ पानी कृती संशोधन नमुना PDF",
-    pageGoal: "संपूर्ण अहवालासाठी किमान ४५ A4 पानांचे संपादकीय लक्ष्य ठेवा.",
+    pageGoal: "संपूर्ण अहवाल जास्तीत जास्त ४५ A4 पानांचा (सुमारे ४० ते ४५ पाने) असावा; ४५ पेक्षा जास्त पाने नकोत.",
     blueprint: REPORT_BLUEPRINT,
     parts: REPORT_PARTS,
     extraRules: `
@@ -297,15 +297,15 @@ export const REPORT_TYPES = {
     blueprint: INNOVATION_BLUEPRINT,
     parts: [
       FRONT_MATTER_PART,
-      makeChapterPart(INNOVATION_BLUEPRINT, 0, { pageTarget: "६ ते ७ पाने", wordTarget: "सुमारे १८०० ते २२०० शब्द", minWords: 1500 }),
-      makeChapterPart(INNOVATION_BLUEPRINT, 1, { pageTarget: "१२ ते १४ पाने", wordTarget: "सुमारे ३००० ते ३५०० शब्द", minWords: 2600 }),
-      makeChapterPart(INNOVATION_BLUEPRINT, 2, { pageTarget: "१० ते १२ पाने", wordTarget: "सुमारे ३००० ते ३५०० शब्द", minWords: 2600 }),
+      makeChapterPart(INNOVATION_BLUEPRINT, 0, { pageTarget: "३ ते ४ पाने", wordTarget: "सुमारे ११०० ते १४०० शब्द", minWords: 900 }),
+      makeChapterPart(INNOVATION_BLUEPRINT, 1, { pageTarget: "७ ते ८ पाने", wordTarget: "सुमारे २००० ते २४०० शब्द", minWords: 1700 }),
+      makeChapterPart(INNOVATION_BLUEPRINT, 2, { pageTarget: "७ ते ८ पाने", wordTarget: "सुमारे २००० ते २४०० शब्द", minWords: 1700 }),
       {
         id: "appendix",
         title: "प्रकरण ४ – परिशिष्ट आणि अंतिम पाने",
-        pageTarget: "३ ते ४ पाने",
-        wordTarget: "सुमारे ७०० ते १००० शब्द",
-        minWords: 600,
+        pageTarget: "२ ते ३ पाने",
+        wordTarget: "सुमारे ५०० ते ७०० शब्द",
+        minWords: 400,
         sections: [
           "प्रकरण ४ – परिशिष्ट",
           ...INNOVATION_BLUEPRINT.chapters[3].sections,
@@ -336,17 +336,17 @@ export const REPORT_TYPES = {
       {
         id: "chapter1",
         title: "प्रकरण १ – प्रस्तावना",
-        pageTarget: "८ ते ९ पाने",
-        wordTarget: "सुमारे २५०० ते ३००० शब्द",
-        minWords: 2000,
+        pageTarget: "५ ते ६ पाने",
+        wordTarget: "सुमारे १५०० ते १८०० शब्द",
+        minWords: 1300,
         sections: ["प्रकरण १ – प्रस्तावना", ...PROJECT_BLUEPRINT.chapters[0].sections]
       },
       {
         id: "chapter2_3",
         title: "प्रकरण २ – प्रकल्पाची उद्दिष्टे आणि प्रकरण ३ – प्रकल्पाच्या परिकल्पना / शोधप्रश्न",
-        pageTarget: "७ ते ८ पाने",
-        wordTarget: "सुमारे २००० ते २४०० शब्द",
-        minWords: 1700,
+        pageTarget: "४ ते ५ पाने",
+        wordTarget: "सुमारे १२०० ते १५०० शब्द",
+        minWords: 1000,
         sections: [
           "प्रकरण २ – प्रकल्पाची उद्दिष्टे",
           ...PROJECT_BLUEPRINT.chapters[1].sections,
@@ -357,9 +357,9 @@ export const REPORT_TYPES = {
       {
         id: "chapter4_5",
         title: "प्रकरण ४ – प्रकल्प साहित्य व साधने आणि प्रकरण ५ – प्रकल्प प्रक्रिया / पद्धती",
-        pageTarget: "८ ते १० पाने",
-        wordTarget: "सुमारे २५०० ते ३००० शब्द",
-        minWords: 2000,
+        pageTarget: "५ ते ६ पाने",
+        wordTarget: "सुमारे १५०० ते १८०० शब्द",
+        minWords: 1300,
         sections: [
           "प्रकरण ४ – प्रकल्प साहित्य व साधने",
           ...PROJECT_BLUEPRINT.chapters[3].sections,
@@ -370,17 +370,17 @@ export const REPORT_TYPES = {
       {
         id: "chapter6",
         title: "प्रकरण ६ – माहितीचे संकलन व विश्लेषण",
-        pageTarget: "८ ते ९ पाने",
-        wordTarget: "सुमारे २५०० ते ३००० शब्द",
-        minWords: 2000,
+        pageTarget: "५ ते ६ पाने",
+        wordTarget: "सुमारे १५०० ते १८०० शब्द",
+        minWords: 1300,
         sections: ["प्रकरण ६ – माहितीचे संकलन व विश्लेषण", ...PROJECT_BLUEPRINT.chapters[5].sections]
       },
       {
         id: "chapter7",
         title: "प्रकरण ७ – निष्कर्ष, सारांश, संदर्भ, परिशिष्टे आणि अंतिम पाने",
-        pageTarget: "७ ते ८ पाने",
-        wordTarget: "सुमारे २००० ते २५०० शब्द",
-        minWords: 1600,
+        pageTarget: "४ ते ५ पाने",
+        wordTarget: "सुमारे १२०० ते १५०० शब्द",
+        minWords: 1000,
         sections: [
           "प्रकरण ७ – निष्कर्ष, सारांश, संदर्भ, परिशिष्टे",
           ...PROJECT_BLUEPRINT.chapters[6].sections,
@@ -643,8 +643,10 @@ ${frontMatterRule}
     अंदाजाने खात्रीशीर म्हणून दाखवू नका; "अंतिम PDF pagination नंतर
     पडताळणी" आवश्यक असलेली नोंद ठेवा.
 12. प्रत्येक भागातील सर्व अपेक्षित विभाग समाविष्ट करा. विभाग गाळू नका.
-13. दिलेले शब्दमान आणि पृष्ठमान हे लक्ष्य आहे. विषयाला उपयुक्त
-    सविस्तर स्पष्टीकरण द्या; पुनरुक्ती किंवा निरर्थक मजकूर नको.
+13. दिलेले शब्दमान ही कमाल मर्यादा आहे; त्यापेक्षा जास्त लिहू नका. संपूर्ण
+    अहवाल ४५ A4 पानांपेक्षा जास्त होऊ नये. फक्त नवीन प्रकरण नवीन पानावर
+    सुरू होते; उपशीर्षके त्याच पानावर क्रमाने येतात, म्हणून उपशीर्षकांच्या
+    आधी <hr> किंवा पानतोड वापरू नका. पुनरुक्ती किंवा निरर्थक मजकूर नको.
 14. ${config.pageGoal}
     पानांची संख्या रिकामी पाने, मोठे रिकामे अंतर किंवा बनावट माहिती
     घालून वाढवू नका. प्रत्यक्ष पानसंख्या PDF export नंतर तपासली जाईल.

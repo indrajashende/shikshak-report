@@ -35,11 +35,13 @@ import {
   Printer,
   FileText,
   FileType,
+  Presentation,
   Heading2,
   LoaderCircle
 } from "lucide-react";
 
 import html2pdf from "html2pdf.js";
+import { htmlToPlainText } from "../utils/htmlToText.js";
 
 // Font size support
 const FontSize = Extension.create({
@@ -1060,6 +1062,17 @@ function EditReport() {
     }
   };
 
+  // PPTX: send the current (edited) report text to the slide generator page.
+  const handleCreatePptx = () => {
+    navigate("/new-pptx", {
+      state: {
+        sourceText: htmlToPlainText(editor?.getHTML() || ""),
+        language: activeReport?.language || "mr",
+        reportType: activeReport?.reportType || "action_research"
+      }
+    });
+  };
+
   // Word download
   const handleDownloadWord = async () => {
     if (!editor) return;
@@ -1202,6 +1215,15 @@ function EditReport() {
           >
             <FileText size={18} />
             Download Word
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCreatePptx}
+            className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-700"
+          >
+            <Presentation size={18} />
+            PPTX
           </button>
         </div>
       </div>

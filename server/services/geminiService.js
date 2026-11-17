@@ -58,7 +58,7 @@ function getModelCandidates() {
 // Gemini Client
 // --------------------------------------------------
 
-function createGeminiClient() {
+export function createGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -147,7 +147,7 @@ function shouldTryFallback(status) {
 // Generate Content With Automatic Model Fallback
 // --------------------------------------------------
 
-async function generateWithFallback(ai, prompt, options = {}) {
+export async function generateWithFallback(ai, prompt, options = {}) {
   const models = getModelCandidates();
   let lastError = null;
 
